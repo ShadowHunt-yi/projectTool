@@ -7,7 +7,7 @@ import { runCommand } from './cli/run'
 import { infoCommand } from './cli/info'
 import { scriptCommand } from './cli/script'
 
-const VERSION = '0.1.0'
+const VERSION = '0.1.1'
 
 interface CliOptions {
   verbose: boolean

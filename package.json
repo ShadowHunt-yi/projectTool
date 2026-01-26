@@ -1,6 +1,6 @@
 {
   "name": "project-runner",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "零配置智能项目运行器 - 一键运行任意 Node.js 项目",
   "author": "liangzhenqi",
   "license": "MIT",
