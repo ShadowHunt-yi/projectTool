@@ -1,0 +1,47 @@
+{
+  "name": "project-runner",
+  "version": "0.1.0",
+  "description": "零配置智能项目运行器 - 一键运行任意 Node.js 项目",
+  "author": "liangzhenqi",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liangzhenqi/project-runner.git"
+  },
+  "keywords": [
+    "cli",
+    "runner",
+    "project",
+    "npm",
+    "yarn",
+    "pnpm",
+    "bun",
+    "dev",
+    "build",
+    "test"
+  ],
+  "module": "src/index.ts",
+  "type": "module",
+  "bin": {
+    "pr": "src/index.ts"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target node",
+    "link": "bun link",
+    "prepublishOnly": "echo 'Ready to publish'"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
