@@ -1,3 +1,6 @@
+import { readFile, stat } from 'fs/promises'
+import { join } from 'path'
+
 // 包管理器类型
 export type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun'
 
@@ -24,7 +27,7 @@ const LOCKFILE_MAP: Record<string, PackageManager> = {
  * 优先级: packageManager 字段 > volta 字段 > lockfile
  */
 export async function detectPackageManager(projectDir: string): Promise<PackageManagerInfo> {
-  const packageJsonPath = `${projectDir}/package.json`
+  const packageJsonPath = join(projectDir, 'package.json')
 
   // 读取 package.json
   const packageJson = await readPackageJson(packageJsonPath)
@@ -59,7 +62,7 @@ export async function detectPackageManager(projectDir: string): Promise<PackageM
 
   // 3. 检测 lockfile
   for (const [lockfile, pm] of Object.entries(LOCKFILE_MAP)) {
-    const exists = await Bun.file(`${projectDir}/${lockfile}`).exists()
+    const exists = await fileExists(join(projectDir, lockfile))
     if (exists) {
       return { name: pm, source: 'lockfile' }
     }
@@ -104,14 +107,24 @@ export function getInstallCommand(pm: PackageManager): string[] {
 }
 
 /**
+ * 检查文件是否存在
+ */
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    const stats = await stat(path)
+    return stats.isFile()
+  } catch {
+    return false
+  }
+}
+
+/**
  * 读取 package.json
  */
 async function readPackageJson(path: string): Promise<any | null> {
   try {
-    const file = Bun.file(path)
-    if (await file.exists()) {
-      return await file.json()
-    }
+    const content = await readFile(path, 'utf-8')
+    return JSON.parse(content)
   } catch {
     // 忽略错误
   }

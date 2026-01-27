@@ -1,3 +1,6 @@
+import { readFile, stat } from 'fs/promises'
+import { join } from 'path'
+
 export interface ScriptsInfo {
   scripts: Record<string, string>
   // 识别出的主要命令（dev, test, build, start）
@@ -22,18 +25,30 @@ const BUILD_PATTERNS = ['build', 'compile', 'bundle', 'dist']
 const START_PATTERNS = ['start', 'serve', 'preview', 'production']
 
 /**
+ * 检查文件是否存在
+ */
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    const stats = await stat(path)
+    return stats.isFile()
+  } catch {
+    return false
+  }
+}
+
+/**
  * 读取并分析 package.json 的 scripts 字段
  */
 export async function analyzeScripts(projectDir: string): Promise<ScriptsInfo | null> {
-  const packageJsonPath = `${projectDir}/package.json`
+  const packageJsonPath = join(projectDir, 'package.json')
 
   try {
-    const file = Bun.file(packageJsonPath)
-    if (!await file.exists()) {
+    if (!await fileExists(packageJsonPath)) {
       return null
     }
 
-    const packageJson = await file.json()
+    const content = await readFile(packageJsonPath, 'utf-8')
+    const packageJson = JSON.parse(content)
     const scripts = packageJson.scripts || {}
 
     // 智能识别主要命令
@@ -58,16 +73,31 @@ export async function analyzeScripts(projectDir: string): Promise<ScriptsInfo | 
 function findMatchingScript(scripts: Record<string, string>, patterns: string[]): string | undefined {
   const scriptNames = Object.keys(scripts)
 
-  // 按优先级检查每个模式
+  // 第一轮：按优先级检查精确匹配
   for (const pattern of patterns) {
-    // 精确匹配
     if (scripts[pattern]) {
       return pattern
     }
-    // 模糊匹配（包含模式的脚本名）
-    const fuzzyMatch = scriptNames.find(name =>
-      name.toLowerCase().includes(pattern.toLowerCase())
-    )
+  }
+
+  // 第二轮：模糊匹配（包含模式的脚本名）
+  // 排除包含 install 命令的组合脚本
+  for (const pattern of patterns) {
+    const fuzzyMatch = scriptNames.find(name => {
+      if (!name.toLowerCase().includes(pattern.toLowerCase())) {
+        return false
+      }
+      // 检查脚本内容是否包含 install 命令（组合脚本）
+      const scriptContent = scripts[name].toLowerCase()
+      if (scriptContent.includes('npm i') ||
+          scriptContent.includes('npm install') ||
+          scriptContent.includes('yarn install') ||
+          scriptContent.includes('pnpm install') ||
+          scriptContent.includes('bun install')) {
+        return false
+      }
+      return true
+    })
     if (fuzzyMatch) {
       return fuzzyMatch
     }

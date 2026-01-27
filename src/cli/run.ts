@@ -7,6 +7,7 @@ type ScriptType = 'dev' | 'test' | 'build' | 'start'
 
 interface RunOptions {
   noInstall?: boolean
+  forceInstall?: boolean
   scriptType?: ScriptType
 }
 
@@ -15,7 +16,7 @@ interface RunOptions {
  * 完整流程：检测 → install → 启动
  */
 export async function runCommand(projectDir: string, options: RunOptions = {}) {
-  const { noInstall = false, scriptType = 'dev' } = options
+  const { noInstall = false, forceInstall = false, scriptType = 'dev' } = options
 
   // 1. 分析项目
   log('正在分析项目...')
@@ -47,8 +48,14 @@ export async function runCommand(projectDir: string, options: RunOptions = {}) {
   log(`将执行脚本: ${scriptName}`)
 
   // 4. 检查依赖状态，决定是否需要 install
-  if (!noInstall && project.dependencies.needsInstall) {
-    log(`依赖状态: ${project.dependencies.reason || '需要安装'}`)
+  const shouldInstall = !noInstall && (forceInstall || project.dependencies.needsInstall)
+
+  if (shouldInstall) {
+    if (forceInstall) {
+      log('强制安装依赖...')
+    } else {
+      log(`依赖状态: ${project.dependencies.reason || '需要安装'}`)
+    }
     newline()
 
     // 执行 install

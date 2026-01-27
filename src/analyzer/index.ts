@@ -1,3 +1,5 @@
+import { readFile, stat } from 'fs/promises'
+import { join } from 'path'
 import { detectPackageManager, type PackageManagerInfo } from './package-manager'
 import { analyzeScripts, type ScriptsInfo } from './scripts'
 import { checkDependencyStatus, type DependencyStatus } from './dependencies'
@@ -13,12 +15,24 @@ export interface ProjectInfo {
 }
 
 /**
+ * 检查文件是否存在
+ */
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    const stats = await stat(path)
+    return stats.isFile()
+  } catch {
+    return false
+  }
+}
+
+/**
  * 分析项目，获取完整的项目信息
  */
 export async function analyzeProject(projectDir: string): Promise<ProjectInfo> {
   // 检测项目类型（目前仅支持 Node.js）
-  const packageJsonPath = `${projectDir}/package.json`
-  const hasPackageJson = await Bun.file(packageJsonPath).exists()
+  const packageJsonPath = join(projectDir, 'package.json')
+  const hasPackageJson = await fileExists(packageJsonPath)
 
   if (!hasPackageJson) {
     return {
@@ -30,7 +44,13 @@ export async function analyzeProject(projectDir: string): Promise<ProjectInfo> {
   }
 
   // 读取 package.json 基本信息
-  const packageJson = await Bun.file(packageJsonPath).json().catch(() => ({}))
+  let packageJson: any = {}
+  try {
+    const content = await readFile(packageJsonPath, 'utf-8')
+    packageJson = JSON.parse(content)
+  } catch {
+    // 忽略错误
+  }
 
   // 并行执行检测
   const [packageManager, scripts, dependencies] = await Promise.all([

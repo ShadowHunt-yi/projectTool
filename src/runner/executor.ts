@@ -1,7 +1,7 @@
-import { spawn, type Subprocess } from 'bun'
+import { spawn, ChildProcess } from 'child_process'
 import { execLog } from '../utils/log'
 
-let currentProcess: Subprocess | null = null
+let currentProcess: ChildProcess | null = null
 
 /**
  * 执行命令
@@ -22,19 +22,32 @@ export async function execute(
     execLog(cmd.join(' '))
   }
 
-  // 启动子进程
-  currentProcess = spawn({
-    cmd,
-    cwd,
-    env: { ...process.env, ...env },
-    stdio: ['inherit', 'inherit', 'inherit'],
+  return new Promise((resolve, reject) => {
+    // 在 Windows 上需要使用 shell 来执行命令
+    const isWindows = process.platform === 'win32'
+    const command = cmd[0] || ''
+    const args = cmd.slice(1)
+
+    // 启动子进程
+    currentProcess = spawn(command, args, {
+      cwd,
+      env: { ...process.env, ...env },
+      stdio: 'inherit',
+      shell: isWindows,
+    })
+
+    const proc = currentProcess
+
+    proc.on('close', (code: number | null) => {
+      currentProcess = null
+      resolve(code ?? 0)
+    })
+
+    proc.on('error', (err: Error) => {
+      currentProcess = null
+      reject(err)
+    })
   })
-
-  // 等待进程结束
-  const exitCode = await currentProcess.exited
-  currentProcess = null
-
-  return exitCode
 }
 
 /**
@@ -49,19 +62,37 @@ export async function executeCapture(
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const { cwd = process.cwd(), env } = options
 
-  const proc = spawn({
-    cmd,
-    cwd,
-    env: { ...process.env, ...env },
-    stdout: 'pipe',
-    stderr: 'pipe',
+  return new Promise((resolve, reject) => {
+    const isWindows = process.platform === 'win32'
+    const command = cmd[0] || ''
+    const args = cmd.slice(1)
+
+    const proc = spawn(command, args, {
+      cwd,
+      env: { ...process.env, ...env },
+      shell: isWindows,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+
+    let stdout = ''
+    let stderr = ''
+
+    proc.stdout.on('data', (data: Buffer) => {
+      stdout += data.toString()
+    })
+
+    proc.stderr.on('data', (data: Buffer) => {
+      stderr += data.toString()
+    })
+
+    proc.on('close', (code: number | null) => {
+      resolve({ stdout, stderr, exitCode: code ?? 0 })
+    })
+
+    proc.on('error', (err: Error) => {
+      reject(err)
+    })
   })
-
-  const stdout = await new Response(proc.stdout).text()
-  const stderr = await new Response(proc.stderr).text()
-  const exitCode = await proc.exited
-
-  return { stdout, stderr, exitCode }
 }
 
 /**
@@ -88,6 +119,6 @@ export function setupSignalHandlers() {
 /**
  * 获取当前运行的进程
  */
-export function getCurrentProcess(): Subprocess | null {
+export function getCurrentProcess(): ChildProcess | null {
   return currentProcess
 }

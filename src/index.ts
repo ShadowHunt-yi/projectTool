@@ -1,5 +1,3 @@
-#!/usr/bin/env bun
-
 import { resolve } from 'path'
 import { setVerbose, error, info } from './utils/log'
 import { setupSignalHandlers } from './runner/executor'
@@ -7,12 +5,13 @@ import { runCommand } from './cli/run'
 import { infoCommand } from './cli/info'
 import { scriptCommand } from './cli/script'
 
-const VERSION = '0.1.1'
+const VERSION = '0.1.2'
 
 interface CliOptions {
   verbose: boolean
   dir: string
   noInstall: boolean
+  install: boolean
 }
 
 function parseArgs(args: string[]): { command: string; options: CliOptions; args: string[] } {
@@ -20,6 +19,7 @@ function parseArgs(args: string[]): { command: string; options: CliOptions; args
     verbose: false,
     dir: process.cwd(),
     noInstall: false,
+    install: false,
   }
 
   let command = ''
@@ -35,6 +35,8 @@ function parseArgs(args: string[]): { command: string; options: CliOptions; args
       options.dir = resolve(args[++i] || '.')
     } else if (arg === '--no-install') {
       options.noInstall = true
+    } else if (arg === '-i' || arg === '--install') {
+      options.install = true
     } else if (arg === '-h' || arg === '--help') {
       command = 'help'
     } else if (arg === '-V' || arg === '--version') {
@@ -70,12 +72,14 @@ ${'\x1b[1m'}命令:${'\x1b[0m'}
 ${'\x1b[1m'}选项:${'\x1b[0m'}
   -v, --verbose    显示详细检测过程
   -d, --dir <path> 指定项目目录 (默认: 当前目录)
+  -i, --install    强制执行依赖安装
   --no-install     跳过依赖安装步骤
   -h, --help       显示帮助信息
   -V, --version    显示版本号
 
 ${'\x1b[1m'}示例:${'\x1b[0m'}
   pr run           一键启动项目
+  pr run -i        强制安装依赖后启动
   pr run -v        显示详细检测过程
   pr test          运行测试
   pr lint          运行 lint 脚本
@@ -109,7 +113,7 @@ async function main() {
       break
 
     case 'run':
-      await runCommand(options.dir, { noInstall: options.noInstall, scriptType: 'dev' })
+      await runCommand(options.dir, { noInstall: options.noInstall, forceInstall: options.install, scriptType: 'dev' })
       break
 
     case 'test':
