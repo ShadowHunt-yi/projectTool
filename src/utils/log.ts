@@ -14,6 +14,16 @@ const colors = {
   gray: '\x1b[90m',
 }
 
+/**
+ * 带退出码的 CLI 错误
+ */
+export class CliError extends Error {
+  constructor(message: string, public exitCode: number = 1) {
+    super(message)
+    this.name = 'CliError'
+  }
+}
+
 // 全局 verbose 状态
 let isVerbose = false
 

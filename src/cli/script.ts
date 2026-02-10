@@ -1,7 +1,8 @@
 import { analyzeProject } from '../analyzer'
 import { getRunCommand } from '../analyzer/package-manager'
 import { execute } from '../runner/executor'
-import { error, log, info } from '../utils/log'
+import { log, info, CliError } from '../utils/log'
+import { ensurePmAvailable } from '../utils/pm-availability'
 
 /**
  * 运行任意 package.json 脚本
@@ -11,33 +12,32 @@ export async function scriptCommand(projectDir: string, scriptName: string) {
   const project = await analyzeProject(projectDir)
 
   if (project.type === 'unknown') {
-    error('未检测到项目类型。请确保当前目录包含 package.json')
-    process.exit(1)
+    throw new CliError('未检测到项目类型。请确保当前目录包含 package.json')
   }
 
   if (!project.scripts) {
-    error('无法读取 package.json 的 scripts')
-    process.exit(1)
+    throw new CliError('无法读取 package.json 的 scripts')
   }
 
   // 检查脚本是否存在
   const scripts = project.scripts.scripts
   if (!(scriptName in scripts)) {
-    error(`脚本 "${scriptName}" 不存在`)
-    console.log()
     showAvailableScripts(scripts)
-    process.exit(1)
+    throw new CliError(`脚本 "${scriptName}" 不存在`)
   }
 
   log(`包管理器: ${project.packageManager.name}`)
   log(`执行脚本: ${scriptName}`)
 
+  // 确保包管理器可用
+  const resolvedPm = await ensurePmAvailable(project.packageManager.name)
+
   // 执行脚本
-  const runCmd = getRunCommand(project.packageManager.name, scriptName)
+  const runCmd = getRunCommand(resolvedPm, scriptName)
   const exitCode = await execute(runCmd, { cwd: projectDir })
 
   if (exitCode !== 0) {
-    process.exit(exitCode)
+    throw new CliError('脚本执行失败', exitCode)
   }
 }
 

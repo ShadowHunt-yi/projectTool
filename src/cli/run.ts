@@ -1,7 +1,8 @@
 import { analyzeProject, type ProjectInfo } from '../analyzer'
 import { getRunCommand, getInstallCommand } from '../analyzer/package-manager'
 import { execute } from '../runner/executor'
-import { log, error, warn, success, info, newline } from '../utils/log'
+import { log, error, warn, success, info, newline, CliError } from '../utils/log'
+import { ensurePmAvailable } from '../utils/pm-availability'
 
 type ScriptType = 'dev' | 'test' | 'build' | 'start'
 
@@ -12,7 +13,7 @@ interface RunOptions {
 }
 
 /**
- * qy run 命令
+ * pr run 命令
  * 完整流程：检测 → install → 启动
  */
 export async function runCommand(projectDir: string, options: RunOptions = {}) {
@@ -23,8 +24,7 @@ export async function runCommand(projectDir: string, options: RunOptions = {}) {
   const project = await analyzeProject(projectDir)
 
   if (project.type === 'unknown') {
-    error('未检测到项目类型。请确保当前目录包含 package.json')
-    process.exit(1)
+    throw new CliError('未检测到项目类型。请确保当前目录包含 package.json')
   }
 
   // 2. 输出检测结果
@@ -32,22 +32,26 @@ export async function runCommand(projectDir: string, options: RunOptions = {}) {
   log(`包管理器: ${project.packageManager.name} (from ${project.packageManager.source})`)
 
   if (!project.scripts) {
-    error('无法读取 package.json 的 scripts')
-    process.exit(1)
+    throw new CliError('无法读取 package.json 的 scripts')
   }
 
   // 3. 确定要执行的脚本
   const scriptName = findScript(project, scriptType)
 
   if (!scriptName) {
-    error(`未找到 ${scriptType} 相关的脚本`)
     showAvailableScripts(project)
-    process.exit(1)
+    throw new CliError(`未找到 ${scriptType} 相关的脚本`)
   }
 
   log(`将执行脚本: ${scriptName}`)
 
-  // 4. 检查依赖状态，决定是否需要 install
+  // 4. 确保包管理器可用
+  const resolvedPm = await ensurePmAvailable(project.packageManager.name)
+  if (resolvedPm !== project.packageManager.name) {
+    log(`使用 ${resolvedPm} 代替 ${project.packageManager.name}`)
+  }
+
+  // 5. 检查依赖状态，决定是否需要 install
   const shouldInstall = !noInstall && (forceInstall || project.dependencies.needsInstall)
 
   if (shouldInstall) {
@@ -59,12 +63,11 @@ export async function runCommand(projectDir: string, options: RunOptions = {}) {
     newline()
 
     // 执行 install
-    const installCmd = getInstallCommand(project.packageManager.name)
+    const installCmd = getInstallCommand(resolvedPm)
     const installExitCode = await execute(installCmd, { cwd: projectDir })
 
     if (installExitCode !== 0) {
-      error('依赖安装失败')
-      process.exit(installExitCode)
+      throw new CliError('依赖安装失败', installExitCode)
     }
 
     success('依赖安装完成')
@@ -73,12 +76,12 @@ export async function runCommand(projectDir: string, options: RunOptions = {}) {
     log('依赖状态: 已是最新')
   }
 
-  // 5. 执行脚本
-  const runCmd = getRunCommand(project.packageManager.name, scriptName)
+  // 6. 执行脚本
+  const runCmd = getRunCommand(resolvedPm, scriptName)
   const exitCode = await execute(runCmd, { cwd: projectDir })
 
   if (exitCode !== 0) {
-    process.exit(exitCode)
+    throw new CliError('脚本执行失败', exitCode)
   }
 }
 
@@ -120,5 +123,5 @@ function showAvailableScripts(project: ProjectInfo) {
     console.log(`  - ${name}`)
   }
   console.log()
-  info('使用 qy <script> 运行任意脚本')
+  info('使用 pr <script> 运行任意脚本')
 }

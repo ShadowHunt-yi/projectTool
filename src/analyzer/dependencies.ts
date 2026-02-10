@@ -1,5 +1,6 @@
 import { stat } from 'fs/promises'
 import { join } from 'path'
+import { fileExists, directoryExists } from '../utils/fs'
 
 export interface DependencyStatus {
   hasNodeModules: boolean
@@ -33,11 +34,13 @@ export async function checkDependencyStatus(projectDir: string): Promise<Depende
     }
   }
 
+  // 获取 node_modules 修改时间（只读一次）
+  const nodeModulesMtime = await getModifiedTime(nodeModulesPath)
+
   // 2. 检查 lockfile 是否比 node_modules 更新
   const lockfilePath = await findLockfile(projectDir)
   if (lockfilePath) {
     const lockfileMtime = await getModifiedTime(lockfilePath)
-    const nodeModulesMtime = await getModifiedTime(nodeModulesPath)
 
     if (lockfileMtime && nodeModulesMtime && lockfileMtime > nodeModulesMtime) {
       return {
@@ -51,7 +54,6 @@ export async function checkDependencyStatus(projectDir: string): Promise<Depende
   // 3. 检查 package.json 是否比 node_modules 更新
   const packageJsonPath = join(projectDir, 'package.json')
   const packageJsonMtime = await getModifiedTime(packageJsonPath)
-  const nodeModulesMtime = await getModifiedTime(nodeModulesPath)
 
   if (packageJsonMtime && nodeModulesMtime && packageJsonMtime > nodeModulesMtime) {
     return {
@@ -93,26 +95,3 @@ async function getModifiedTime(path: string): Promise<number | null> {
   }
 }
 
-/**
- * 检查目录是否存在
- */
-async function directoryExists(path: string): Promise<boolean> {
-  try {
-    const stats = await stat(path)
-    return stats.isDirectory()
-  } catch {
-    return false
-  }
-}
-
-/**
- * 检查文件是否存在
- */
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    const stats = await stat(path)
-    return stats.isFile()
-  } catch {
-    return false
-  }
-}

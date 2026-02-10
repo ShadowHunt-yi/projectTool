@@ -1,11 +1,12 @@
 import { resolve } from 'path'
-import { setVerbose, error, info } from './utils/log'
+import { setVerbose, error, warn, CliError } from './utils/log'
 import { setupSignalHandlers } from './runner/executor'
 import { runCommand } from './cli/run'
 import { infoCommand } from './cli/info'
 import { scriptCommand } from './cli/script'
 
-const VERSION = '0.1.2'
+declare const __VERSION__: string
+const VERSION = typeof __VERSION__ !== 'undefined' ? __VERSION__ : '0.0.0-dev'
 
 interface CliOptions {
   verbose: boolean
@@ -47,6 +48,8 @@ function parseArgs(args: string[]): { command: string; options: CliOptions; args
       } else {
         remainingArgs.push(arg)
       }
+    } else {
+      warn(`未知选项: ${arg}`)
     }
 
     i++
@@ -140,6 +143,10 @@ async function main() {
 }
 
 main().catch((err) => {
-  error(err.message)
+  if (err instanceof CliError) {
+    error(err.message)
+    process.exit(err.exitCode)
+  }
+  error(err.message || '未知错误')
   process.exit(1)
 })

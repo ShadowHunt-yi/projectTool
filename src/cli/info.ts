@@ -1,5 +1,6 @@
 import { analyzeProject } from '../analyzer'
 import { colors } from '../utils/log'
+import { isPmAvailable } from '../utils/pm-availability'
 
 /**
  * pr info 命令
@@ -38,7 +39,11 @@ export async function infoCommand(projectDir: string) {
     pmInfo += `@${pm.version}`
   }
   pmInfo += ` ${colors.dim}(${pm.source})${colors.reset}`
-  console.log(`${colors.bold}包管理器:${colors.reset} ${pmInfo}`)
+  const pmAvailable = await isPmAvailable(pm.name)
+  const pmStatus = pmAvailable
+    ? `${colors.green}已安装${colors.reset}`
+    : `${colors.red}未安装${colors.reset}`
+  console.log(`${colors.bold}包管理器:${colors.reset} ${pmInfo} [${pmStatus}]`)
 
   // 依赖状态
   const deps = project.dependencies

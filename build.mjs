@@ -1,12 +1,10 @@
 import * as esbuild from 'esbuild'
-import { readdir, mkdir, copyFile } from 'fs/promises'
-import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
+import { readFile } from 'fs/promises'
 
 async function build() {
   console.log('Building project-runner...')
+
+  const pkg = JSON.parse(await readFile('package.json', 'utf-8'))
 
   // Bundle all TypeScript files into a single JavaScript file
   await esbuild.build({
@@ -18,6 +16,9 @@ async function build() {
     outfile: 'dist/index.js',
     banner: {
       js: '#!/usr/bin/env node',
+    },
+    define: {
+      __VERSION__: JSON.stringify(pkg.version),
     },
     external: [],
   })

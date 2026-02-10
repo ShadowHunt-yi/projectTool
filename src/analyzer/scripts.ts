@@ -1,6 +1,3 @@
-import { readFile, stat } from 'fs/promises'
-import { join } from 'path'
-
 export interface ScriptsInfo {
   scripts: Record<string, string>
   // 识别出的主要命令（dev, test, build, start）
@@ -22,33 +19,17 @@ const TEST_PATTERNS = ['test', 'test:unit', 'test:all', 'spec']
 const BUILD_PATTERNS = ['build', 'compile', 'bundle', 'dist']
 
 // 生产启动命令的常见名称
-const START_PATTERNS = ['start', 'serve', 'preview', 'production']
-
-/**
- * 检查文件是否存在
- */
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    const stats = await stat(path)
-    return stats.isFile()
-  } catch {
-    return false
-  }
-}
+const START_PATTERNS = ['start', 'preview', 'production']
 
 /**
  * 读取并分析 package.json 的 scripts 字段
  */
-export async function analyzeScripts(projectDir: string): Promise<ScriptsInfo | null> {
-  const packageJsonPath = join(projectDir, 'package.json')
+export function analyzeScripts(packageJson?: any): ScriptsInfo | null {
+  if (!packageJson) {
+    return null
+  }
 
   try {
-    if (!await fileExists(packageJsonPath)) {
-      return null
-    }
-
-    const content = await readFile(packageJsonPath, 'utf-8')
-    const packageJson = JSON.parse(content)
     const scripts = packageJson.scripts || {}
 
     // 智能识别主要命令

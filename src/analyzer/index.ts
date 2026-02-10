@@ -1,8 +1,9 @@
-import { readFile, stat } from 'fs/promises'
+import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { detectPackageManager, type PackageManagerInfo } from './package-manager'
 import { analyzeScripts, type ScriptsInfo } from './scripts'
 import { checkDependencyStatus, type DependencyStatus } from './dependencies'
+import { fileExists } from '../utils/fs'
 
 export interface ProjectInfo {
   type: 'nodejs' | 'python' | 'unknown'
@@ -12,18 +13,6 @@ export interface ProjectInfo {
   name?: string
   version?: string
   description?: string
-}
-
-/**
- * 检查文件是否存在
- */
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    const stats = await stat(path)
-    return stats.isFile()
-  } catch {
-    return false
-  }
 }
 
 /**
@@ -43,7 +32,7 @@ export async function analyzeProject(projectDir: string): Promise<ProjectInfo> {
     }
   }
 
-  // 读取 package.json 基本信息
+  // 读取 package.json（只读一次，传递给子函数）
   let packageJson: any = {}
   try {
     const content = await readFile(packageJsonPath, 'utf-8')
@@ -52,12 +41,13 @@ export async function analyzeProject(projectDir: string): Promise<ProjectInfo> {
     // 忽略错误
   }
 
-  // 并行执行检测
-  const [packageManager, scripts, dependencies] = await Promise.all([
-    detectPackageManager(projectDir),
-    analyzeScripts(projectDir),
+  // 并行执行检测（packageJson 已读取，直接传递）
+  const [packageManager, dependencies] = await Promise.all([
+    detectPackageManager(projectDir, packageJson),
     checkDependencyStatus(projectDir),
   ])
+
+  const scripts = analyzeScripts(packageJson)
 
   return {
     type: 'nodejs',
