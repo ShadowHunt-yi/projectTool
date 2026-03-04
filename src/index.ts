@@ -13,6 +13,7 @@ interface CliOptions {
   dir: string
   noInstall: boolean
   install: boolean
+  entry?: string
 }
 
 function parseArgs(args: string[]): { command: string; options: CliOptions; args: string[] } {
@@ -29,15 +30,31 @@ function parseArgs(args: string[]): { command: string; options: CliOptions; args
 
   while (i < args.length) {
     const arg = args[i]
+    if (!arg) {
+      i++
+      continue
+    }
 
     if (arg === '-v' || arg === '--verbose') {
       options.verbose = true
     } else if (arg === '-d' || arg === '--dir') {
-      options.dir = resolve(args[++i] || '.')
+      const dirArg = args[i + 1]
+      if (!dirArg || dirArg.startsWith('-')) {
+        throw new CliError('--dir 需要一个目录参数')
+      }
+      options.dir = resolve(dirArg)
+      i++
     } else if (arg === '--no-install') {
       options.noInstall = true
     } else if (arg === '-i' || arg === '--install') {
       options.install = true
+    } else if (arg === '-e' || arg === '--entry') {
+      const entryArg = args[i + 1]
+      if (!entryArg || entryArg.startsWith('-')) {
+        throw new CliError('--entry 需要一个入口名参数')
+      }
+      options.entry = entryArg.trim()
+      i++
     } else if (arg === '-h' || arg === '--help') {
       command = 'help'
     } else if (arg === '-V' || arg === '--version') {
@@ -65,7 +82,7 @@ ${'\x1b[36m'}pr${'\x1b[0m'} v${VERSION} - 零配置智能项目运行器 (projec
 ${'\x1b[1m'}用法:${'\x1b[0m'} pr <command> [options]
 
 ${'\x1b[1m'}命令:${'\x1b[0m'}
-  run              完整流程：检测 → install → 启动开发服务器
+  run              完整流程：检测 -> install -> 启动开发脚本
   test             运行测试
   build            构建项目
   start            生产模式启动
@@ -77,16 +94,16 @@ ${'\x1b[1m'}选项:${'\x1b[0m'}
   -d, --dir <path> 指定项目目录 (默认: 当前目录)
   -i, --install    强制执行依赖安装
   --no-install     跳过依赖安装步骤
+  -e, --entry      指定 MPA 入口 (也可用环境变量 PR_ENTRY)
   -h, --help       显示帮助信息
   -V, --version    显示版本号
 
 ${'\x1b[1m'}示例:${'\x1b[0m'}
-  pr run           一键启动项目
-  pr run -i        强制安装依赖后启动
-  pr run -v        显示详细检测过程
-  pr test          运行测试
-  pr lint          运行 lint 脚本
-  pr info          查看项目信息
+  pr run
+  pr run --entry main
+  PR_ENTRY=formengine pr run
+  pr build --entry approve
+  pr info
 `)
 }
 
@@ -95,16 +112,10 @@ function showVersion() {
 }
 
 async function main() {
-  // 设置信号处理
   setupSignalHandlers()
-
-  // 解析命令行参数
-  const { command, options, args } = parseArgs(process.argv.slice(2))
-
-  // 设置 verbose 模式
+  const { command, options } = parseArgs(process.argv.slice(2))
   setVerbose(options.verbose)
 
-  // 处理命令
   switch (command) {
     case '':
     case 'help':
@@ -116,19 +127,36 @@ async function main() {
       break
 
     case 'run':
-      await runCommand(options.dir, { noInstall: options.noInstall, forceInstall: options.install, scriptType: 'dev' })
+      await runCommand(options.dir, {
+        noInstall: options.noInstall,
+        forceInstall: options.install,
+        scriptType: 'dev',
+        entry: options.entry,
+      })
       break
 
     case 'test':
-      await runCommand(options.dir, { noInstall: true, scriptType: 'test' })
+      await runCommand(options.dir, {
+        noInstall: true,
+        scriptType: 'test',
+        entry: options.entry,
+      })
       break
 
     case 'build':
-      await runCommand(options.dir, { noInstall: true, scriptType: 'build' })
+      await runCommand(options.dir, {
+        noInstall: true,
+        scriptType: 'build',
+        entry: options.entry,
+      })
       break
 
     case 'start':
-      await runCommand(options.dir, { noInstall: true, scriptType: 'start' })
+      await runCommand(options.dir, {
+        noInstall: true,
+        scriptType: 'start',
+        entry: options.entry,
+      })
       break
 
     case 'info':
@@ -136,7 +164,6 @@ async function main() {
       break
 
     default:
-      // 尝试运行自定义脚本
       await scriptCommand(options.dir, command)
       break
   }

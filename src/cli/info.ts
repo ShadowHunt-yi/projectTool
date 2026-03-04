@@ -2,20 +2,15 @@ import { analyzeProject } from '../analyzer'
 import { colors } from '../utils/log'
 import { isPmAvailable } from '../utils/pm-availability'
 
-/**
- * pr info 命令
- * 显示项目分析结果
- */
 export async function infoCommand(projectDir: string) {
   const project = await analyzeProject(projectDir)
 
   if (project.type === 'unknown') {
-    console.log(`${colors.red}✗${colors.reset} 未检测到项目类型`)
-    console.log('  请确保当前目录包含 package.json 或其他项目配置文件')
+    console.log(`${colors.red}×${colors.reset} 未检测到项目类型`)
+    console.log('  请确认当前目录包含 package.json')
     return
   }
 
-  // 项目基本信息
   console.log()
   console.log(`${colors.cyan}${colors.bold}pr - 项目分析结果${colors.reset}`)
   console.log('─'.repeat(40))
@@ -32,7 +27,6 @@ export async function infoCommand(projectDir: string) {
 
   console.log(`${colors.bold}项目类型:${colors.reset} ${project.type}`)
 
-  // 包管理器信息
   const pm = project.packageManager
   let pmInfo = pm.name
   if (pm.version) {
@@ -45,20 +39,38 @@ export async function infoCommand(projectDir: string) {
     : `${colors.red}未安装${colors.reset}`
   console.log(`${colors.bold}包管理器:${colors.reset} ${pmInfo} [${pmStatus}]`)
 
-  // 依赖状态
   const deps = project.dependencies
   const depsStatus = deps.needsInstall
     ? `${colors.yellow}需要安装${colors.reset} (${deps.reason})`
     : `${colors.green}已就绪${colors.reset}`
   console.log(`${colors.bold}依赖状态:${colors.reset} ${depsStatus}`)
 
+  if (project.scripts) {
+    const { mpa } = project.scripts
+    if (mpa.isMpa) {
+      const sourceLabel =
+        mpa.source === 'local-config'
+          ? '.pr.local.json'
+          : mpa.source === 'package-json'
+            ? 'package.json#pr'
+            : 'scripts'
+      console.log(`${colors.bold}MPA 模式:${colors.reset} 是 ${colors.dim}(${sourceLabel})${colors.reset}`)
+      console.log(`${colors.bold}可选入口:${colors.reset} ${mpa.entries.join(', ')}`)
+      if (mpa.defaultEntry) {
+        console.log(`${colors.bold}默认入口:${colors.reset} ${mpa.defaultEntry}`)
+      }
+      if (project.localConfig) {
+        console.log(`${colors.bold}本地配置:${colors.reset} .pr.local.json ${colors.dim}(自动加入 .gitignore)${colors.reset}`)
+      }
+    } else {
+      console.log(`${colors.bold}MPA 模式:${colors.reset} 否`)
+    }
+  }
+
   console.log()
 
-  // Scripts 信息
   if (project.scripts) {
     const { scripts, detected } = project.scripts
-
-    // 显示识别的主要命令
     console.log(`${colors.bold}识别的命令:${colors.reset}`)
     if (detected.dev) {
       console.log(`  ${colors.green}pr run${colors.reset}   → ${pm.name} ${detected.dev}`)
@@ -75,14 +87,15 @@ export async function infoCommand(projectDir: string) {
 
     console.log()
 
-    // 显示所有可用脚本
     const allScripts = Object.keys(scripts)
     if (allScripts.length > 0) {
       console.log(`${colors.bold}所有脚本:${colors.reset}`)
       for (const name of allScripts) {
         const cmd = scripts[name]
-        // 截断过长的命令
-        const displayCmd = cmd.length > 40 ? cmd.slice(0, 40) + '...' : cmd
+        if (!cmd) {
+          continue
+        }
+        const displayCmd = cmd.length > 60 ? cmd.slice(0, 60) + '...' : cmd
         console.log(`  ${colors.cyan}${name}${colors.reset} ${colors.dim}→ ${displayCmd}${colors.reset}`)
       }
     }

@@ -106,8 +106,32 @@ pr info
 | `-d, --dir <path>` | 指定项目目录（默认：当前目录）|
 | `-i, --install` | 强制执行依赖安装 |
 | `--no-install` | 跳过依赖安装步骤 |
+| `-e, --entry <name>` | 指定 MPA 入口（也可用 `PR_ENTRY`） |
 | `-h, --help` | 显示帮助信息 |
 | `-V, --version` | 显示版本号 |
+
+## MPA 项目支持
+
+`pr run` 会自动检测是否存在 `dev:<entry>` 形式的多入口脚本。
+
+- 在交互终端中：自动弹出入口列表并让你选择。
+- 在 CI / 非交互环境中：按优先级选择入口
+  1. `--entry <name>`
+  2. `PR_ENTRY=<name>`
+  3. `.pr.local.json` 中的 `defaultEntry`
+  4. 若仍无法确定则报错并提示可选入口
+
+本地配置文件（推荐）：
+
+```json
+{
+  "entries": ["main", "formengine", "design", "approve"],
+  "defaultEntry": "main"
+}
+```
+
+- 文件名固定：`.pr.local.json`
+- 当该文件存在时，`pr` 会自动确保 `.gitignore` 包含 `.pr.local.json`
 
 ## 示例输出
 
