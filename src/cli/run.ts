@@ -4,7 +4,7 @@ import { getRunCommand, getInstallCommand } from '../analyzer/package-manager'
 import type { StandardScriptType } from '../analyzer/scripts'
 import { execute } from '../runner/executor'
 import { log, warn, success, info, newline, CliError } from '../utils/log'
-import { ensurePmAvailable } from '../utils/pm-availability'
+import { resolvePmRuntime } from '../utils/pm-availability'
 
 interface RunOptions {
   noInstall?: boolean
@@ -43,9 +43,14 @@ export async function runCommand(projectDir: string, options: RunOptions = {}) {
   }
   log(`将执行脚本: ${scriptName}`)
 
-  const resolvedPm = await ensurePmAvailable(project.packageManager.name)
-  if (resolvedPm !== project.packageManager.name) {
-    log(`使用 ${resolvedPm} 代替 ${project.packageManager.name}`)
+  const resolvedPm = await resolvePmRuntime(projectDir, project.packageManager)
+  if (resolvedPm.name !== project.packageManager.name) {
+    log(`使用 ${resolvedPm.name} 代替 ${project.packageManager.name}`)
+  } else if (resolvedPm.source === 'corepack' && resolvedPm.version) {
+    log(`使用 corepack 运行 ${resolvedPm.name}@${resolvedPm.version}`)
+  }
+  if (resolvedPm.reason) {
+    log(resolvedPm.reason)
   }
 
   const shouldInstall = !noInstall && (forceInstall || project.dependencies.needsInstall)

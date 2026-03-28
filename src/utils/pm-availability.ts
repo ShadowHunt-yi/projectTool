@@ -1,10 +1,19 @@
 import { createInterface } from 'node:readline/promises'
+import { readFile } from 'fs/promises'
+import { join } from 'path'
 import { executeCapture } from '../runner/executor'
 import { info, warn, success, error, colors, CliError } from './log'
-import type { PackageManager } from '../analyzer/package-manager'
+import type { PackageManager, PackageManagerInfo, ResolvedPackageManager } from '../analyzer/package-manager'
 
 // 会话级缓存：PM 名称 → 是否可用
 const availabilityCache = new Map<PackageManager, boolean>()
+const YARN_CLASSIC_VERSION = '1.22.22'
+let corepackAvailableCache: boolean | undefined
+
+interface PreferredPmVersion {
+  version: string
+  reason: string
+}
 
 /**
  * 检测包管理器是否已安装
@@ -53,6 +62,34 @@ export async function ensurePmAvailable(pm: PackageManager): Promise<PackageMana
 
   // 交互环境：提示用户选择
   return await promptPmResolution(pm)
+}
+
+/**
+ * 解析项目实际应使用的包管理器运行时
+ */
+export async function resolvePmRuntime(
+  projectDir: string,
+  pmInfo: PackageManagerInfo
+): Promise<ResolvedPackageManager> {
+  const preferredVersion = await getPreferredPmVersion(projectDir, pmInfo)
+
+  if (preferredVersion && supportsCorepack(pmInfo.name) && await isCorepackAvailable()) {
+    return {
+      name: pmInfo.name,
+      version: preferredVersion.version,
+      commandPrefix: ['corepack', `${pmInfo.name}@${preferredVersion.version}`],
+      source: 'corepack',
+      reason: preferredVersion.reason,
+    }
+  }
+
+  const resolvedPm = await ensurePmAvailable(pmInfo.name)
+
+  return {
+    name: resolvedPm,
+    commandPrefix: [resolvedPm],
+    source: 'native',
+  }
 }
 
 /**
@@ -124,4 +161,65 @@ async function autoInstallPm(pm: PackageManager): Promise<PackageManager> {
   success(`${pm} 安装完成`)
   console.log()
   return pm
+}
+
+async function isCorepackAvailable(): Promise<boolean> {
+  if (corepackAvailableCache !== undefined) {
+    return corepackAvailableCache
+  }
+
+  try {
+    const result = await executeCapture(['corepack', '--version'])
+    corepackAvailableCache = result.exitCode === 0 && result.stdout.trim().length > 0
+  } catch {
+    corepackAvailableCache = false
+  }
+
+  return corepackAvailableCache
+}
+
+async function getPreferredPmVersion(projectDir: string, pmInfo: PackageManagerInfo): Promise<PreferredPmVersion | undefined> {
+  if (pmInfo.version) {
+    return {
+      version: pmInfo.version,
+      reason: `检测到 ${pmInfo.source} 指定的 ${pmInfo.name}@${pmInfo.version}，优先使用对应版本`,
+    }
+  }
+
+  if (pmInfo.name !== 'yarn' || pmInfo.source !== 'lockfile') {
+    return undefined
+  }
+
+  const yarnLockKind = await detectYarnLockKind(projectDir)
+  if (yarnLockKind !== 'classic') {
+    return undefined
+  }
+
+  return {
+    version: YARN_CLASSIC_VERSION,
+    reason: `检测到 yarn.lock v1，优先使用 Yarn Classic ${YARN_CLASSIC_VERSION} 以避免全局 Yarn Berry 自动迁移`,
+  }
+}
+
+async function detectYarnLockKind(projectDir: string): Promise<'classic' | 'berry' | 'unknown'> {
+  try {
+    const content = await readFile(join(projectDir, 'yarn.lock'), 'utf-8')
+    const header = content.slice(0, 512)
+
+    if (header.includes('yarn lockfile v1')) {
+      return 'classic'
+    }
+
+    if (content.includes('__metadata:')) {
+      return 'berry'
+    }
+  } catch {
+    return 'unknown'
+  }
+
+  return 'unknown'
+}
+
+function supportsCorepack(pm: PackageManager): boolean {
+  return pm === 'npm' || pm === 'pnpm' || pm === 'yarn'
 }
