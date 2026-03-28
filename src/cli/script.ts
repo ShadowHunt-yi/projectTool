@@ -2,7 +2,7 @@ import { analyzeProject } from '../analyzer'
 import { getRunCommand } from '../analyzer/package-manager'
 import { execute } from '../runner/executor'
 import { log, info, CliError } from '../utils/log'
-import { ensurePmAvailable } from '../utils/pm-availability'
+import { resolvePmRuntime } from '../utils/pm-availability'
 
 /**
  * 运行任意 package.json 脚本
@@ -30,7 +30,13 @@ export async function scriptCommand(projectDir: string, scriptName: string) {
   log(`执行脚本: ${scriptName}`)
 
   // 确保包管理器可用
-  const resolvedPm = await ensurePmAvailable(project.packageManager.name)
+  const resolvedPm = await resolvePmRuntime(projectDir, project.packageManager)
+  if (resolvedPm.source === 'corepack' && resolvedPm.version) {
+    log(`使用 corepack 运行 ${resolvedPm.name}@${resolvedPm.version}`)
+  }
+  if (resolvedPm.reason) {
+    log(resolvedPm.reason)
+  }
 
   // 执行脚本
   const runCmd = getRunCommand(resolvedPm, scriptName)

@@ -13,6 +13,14 @@ export interface PackageManagerInfo {
   source: DetectionSource
 }
 
+export interface ResolvedPackageManager {
+  name: PackageManager
+  version?: string
+  commandPrefix: string[]
+  source: 'native' | 'corepack'
+  reason?: string
+}
+
 // Lockfile 检测映射
 const LOCKFILE_MAP: Record<string, PackageManager> = {
   'bun.lockb': 'bun',
@@ -71,34 +79,49 @@ export async function detectPackageManager(projectDir: string, packageJson?: any
 /**
  * 获取包管理器的运行命令
  */
-export function getRunCommand(pm: PackageManager, script: string): string[] {
-  switch (pm) {
+export function getRunCommand(pm: PackageManager | ResolvedPackageManager, script: string): string[] {
+  const resolvedPm = normalizeResolvedPm(pm)
+
+  switch (resolvedPm.name) {
     case 'bun':
-      return ['bun', 'run', script]
+      return [...resolvedPm.commandPrefix, 'run', script]
     case 'pnpm':
-      return ['pnpm', script]
+      return [...resolvedPm.commandPrefix, script]
     case 'yarn':
-      return ['yarn', script]
+      return [...resolvedPm.commandPrefix, script]
     case 'npm':
     default:
-      return ['npm', 'run', script]
+      return [...resolvedPm.commandPrefix, 'run', script]
   }
 }
 
 /**
  * 获取包管理器的安装命令
  */
-export function getInstallCommand(pm: PackageManager): string[] {
-  switch (pm) {
+export function getInstallCommand(pm: PackageManager | ResolvedPackageManager): string[] {
+  const resolvedPm = normalizeResolvedPm(pm)
+
+  switch (resolvedPm.name) {
     case 'bun':
-      return ['bun', 'install']
+      return [...resolvedPm.commandPrefix, 'install']
     case 'pnpm':
-      return ['pnpm', 'install']
+      return [...resolvedPm.commandPrefix, 'install']
     case 'yarn':
-      return ['yarn', 'install']
+      return [...resolvedPm.commandPrefix, 'install']
     case 'npm':
     default:
-      return ['npm', 'install']
+      return [...resolvedPm.commandPrefix, 'install']
   }
 }
 
+function normalizeResolvedPm(pm: PackageManager | ResolvedPackageManager): ResolvedPackageManager {
+  if (typeof pm === 'string') {
+    return {
+      name: pm,
+      commandPrefix: [pm],
+      source: 'native',
+    }
+  }
+
+  return pm
+}

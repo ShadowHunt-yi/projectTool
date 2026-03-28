@@ -87,6 +87,11 @@ pr info
    - `yarn.lock` → yarn
    - `package-lock.json` → npm
 
+执行时，`pr` 会优先遵循项目声明的包管理器版本：
+
+- 若 `package.json` 的 `packageManager` / `volta` 为 `npm` / `yarn` / `pnpm` 指定了版本，则优先通过 `corepack` 使用该版本。
+- 若仅检测到 `yarn.lock` 且锁文件是 v1，`pr` 会优先使用 Yarn Classic，避免全局 Yarn 4 自动迁移旧项目。
+
 ## 命令
 
 | 命令 | 说明 |
