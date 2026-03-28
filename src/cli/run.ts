@@ -2,6 +2,7 @@ import { createInterface } from 'node:readline/promises'
 import { analyzeProject, type ProjectInfo } from '../analyzer'
 import { getRunCommand, getInstallCommand } from '../analyzer/package-manager'
 import type { StandardScriptType } from '../analyzer/scripts'
+import { markDependenciesInstalled } from '../analyzer/dependencies'
 import { execute } from '../runner/executor'
 import { log, warn, success, info, newline, CliError } from '../utils/log'
 import { resolvePmRuntime } from '../utils/pm-availability'
@@ -71,6 +72,7 @@ export async function runCommand(projectDir: string, options: RunOptions = {}) {
       throw new CliError('依赖安装失败', installExitCode)
     }
 
+    await markDependenciesInstalled(projectDir)
     success('依赖安装完成')
     newline()
   } else if (!noInstall) {
