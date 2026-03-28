@@ -78,6 +78,9 @@ export async function resolvePmRuntime(
       name: pmInfo.name,
       version: preferredVersion.version,
       commandPrefix: ['corepack', `${pmInfo.name}@${preferredVersion.version}`],
+      env: {
+        COREPACK_ENABLE_AUTO_PIN: '0',
+      },
       source: 'corepack',
       reason: preferredVersion.reason,
     }

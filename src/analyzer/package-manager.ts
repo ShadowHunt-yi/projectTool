@@ -17,6 +17,7 @@ export interface ResolvedPackageManager {
   name: PackageManager
   version?: string
   commandPrefix: string[]
+  env?: Record<string, string>
   source: 'native' | 'corepack'
   reason?: string
 }

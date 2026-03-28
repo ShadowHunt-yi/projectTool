@@ -63,7 +63,10 @@ export async function runCommand(projectDir: string, options: RunOptions = {}) {
     newline()
 
     const installCmd = getInstallCommand(resolvedPm)
-    const installExitCode = await execute(installCmd, { cwd: projectDir })
+    const installExitCode = await execute(installCmd, {
+      cwd: projectDir,
+      env: resolvedPm.env,
+    })
     if (installExitCode !== 0) {
       throw new CliError('依赖安装失败', installExitCode)
     }
@@ -75,7 +78,10 @@ export async function runCommand(projectDir: string, options: RunOptions = {}) {
   }
 
   const runCmd = getRunCommand(resolvedPm, scriptName)
-  const exitCode = await execute(runCmd, { cwd: projectDir })
+  const exitCode = await execute(runCmd, {
+    cwd: projectDir,
+    env: resolvedPm.env,
+  })
   if (exitCode !== 0) {
     throw new CliError('脚本执行失败', exitCode)
   }

@@ -40,7 +40,10 @@ export async function scriptCommand(projectDir: string, scriptName: string) {
 
   // 执行脚本
   const runCmd = getRunCommand(resolvedPm, scriptName)
-  const exitCode = await execute(runCmd, { cwd: projectDir })
+  const exitCode = await execute(runCmd, {
+    cwd: projectDir,
+    env: resolvedPm.env,
+  })
 
   if (exitCode !== 0) {
     throw new CliError('脚本执行失败', exitCode)
