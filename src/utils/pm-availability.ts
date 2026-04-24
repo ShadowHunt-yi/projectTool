@@ -9,6 +9,7 @@ import type { PackageManager, PackageManagerInfo, ResolvedPackageManager } from 
 const availabilityCache = new Map<PackageManager, boolean>()
 const YARN_CLASSIC_VERSION = '1.22.22'
 let corepackAvailableCache: boolean | undefined
+let voltaAvailableCache: boolean | undefined
 
 interface PreferredPmVersion {
   version: string
@@ -73,6 +74,25 @@ export async function resolvePmRuntime(
 ): Promise<ResolvedPackageManager> {
   const preferredVersion = await getPreferredPmVersion(projectDir, pmInfo)
 
+  if (pmInfo.nodeVersion) {
+    if (await isVoltaAvailable()) {
+      const commandPrefix = buildVoltaCommandPrefix(pmInfo, preferredVersion?.version)
+
+      return {
+        name: pmInfo.name,
+        version: preferredVersion?.version,
+        commandPrefix,
+        source: 'volta',
+        reason: [
+          `检测到 volta.node=${pmInfo.nodeVersion}，通过 Volta 切换 Node 运行项目命令`,
+          preferredVersion?.reason,
+        ].filter(Boolean).join('；'),
+      }
+    }
+
+    warn(`检测到 volta.node=${pmInfo.nodeVersion}，但未找到 volta 命令，无法自动切换 Node 版本`)
+  }
+
   if (preferredVersion && supportsCorepack(pmInfo.name) && await isCorepackAvailable()) {
     return {
       name: pmInfo.name,
@@ -93,6 +113,18 @@ export async function resolvePmRuntime(
     commandPrefix: [resolvedPm],
     source: 'native',
   }
+}
+
+function buildVoltaCommandPrefix(pmInfo: PackageManagerInfo, pmVersion?: string): string[] {
+  const commandPrefix = ['volta', 'run', '--node', pmInfo.nodeVersion!]
+  const versionFlag = getVoltaPackageManagerFlag(pmInfo.name)
+
+  if (versionFlag && pmVersion) {
+    commandPrefix.push(versionFlag, pmVersion)
+  }
+
+  commandPrefix.push(pmInfo.name)
+  return commandPrefix
 }
 
 /**
@@ -181,6 +213,21 @@ async function isCorepackAvailable(): Promise<boolean> {
   return corepackAvailableCache
 }
 
+async function isVoltaAvailable(): Promise<boolean> {
+  if (voltaAvailableCache !== undefined) {
+    return voltaAvailableCache
+  }
+
+  try {
+    const result = await executeCapture(['volta', '--version'])
+    voltaAvailableCache = result.exitCode === 0 && result.stdout.trim().length > 0
+  } catch {
+    voltaAvailableCache = false
+  }
+
+  return voltaAvailableCache
+}
+
 async function getPreferredPmVersion(projectDir: string, pmInfo: PackageManagerInfo): Promise<PreferredPmVersion | undefined> {
   if (pmInfo.version) {
     return {
@@ -225,4 +272,17 @@ async function detectYarnLockKind(projectDir: string): Promise<'classic' | 'berr
 
 function supportsCorepack(pm: PackageManager): boolean {
   return pm === 'npm' || pm === 'pnpm' || pm === 'yarn'
+}
+
+function getVoltaPackageManagerFlag(pm: PackageManager): string | undefined {
+  switch (pm) {
+    case 'npm':
+      return '--npm'
+    case 'pnpm':
+      return '--pnpm'
+    case 'yarn':
+      return '--yarn'
+    default:
+      return undefined
+  }
 }

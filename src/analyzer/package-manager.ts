@@ -10,6 +10,7 @@ export type DetectionSource = 'packageManager' | 'volta' | 'lockfile' | 'default
 export interface PackageManagerInfo {
   name: PackageManager
   version?: string
+  nodeVersion?: string
   source: DetectionSource
 }
 
@@ -18,7 +19,7 @@ export interface ResolvedPackageManager {
   version?: string
   commandPrefix: string[]
   env?: Record<string, string>
-  source: 'native' | 'corepack'
+  source: 'native' | 'corepack' | 'volta'
   reason?: string
 }
 
@@ -40,15 +41,17 @@ export async function detectPackageManager(projectDir: string, packageJson?: any
     return { name: 'npm', source: 'default' }
   }
 
+  const nodeVersion = getVoltaNodeVersion(packageJson)
+
   // 1. 检查 packageManager 字段 (corepack)
   if (packageJson.packageManager) {
     const match = packageJson.packageManager.match(/^(npm|yarn|pnpm|bun)@(.+)$/)
     if (match) {
-      return {
+      return withNodeVersion({
         name: match[1] as PackageManager,
         version: match[2],
         source: 'packageManager',
-      }
+      }, nodeVersion)
     }
   }
 
@@ -56,11 +59,11 @@ export async function detectPackageManager(projectDir: string, packageJson?: any
   if (packageJson.volta) {
     for (const pm of ['pnpm', 'yarn', 'npm'] as PackageManager[]) {
       if (packageJson.volta[pm]) {
-        return {
+        return withNodeVersion({
           name: pm,
           version: packageJson.volta[pm],
           source: 'volta',
-        }
+        }, nodeVersion)
       }
     }
   }
@@ -69,12 +72,28 @@ export async function detectPackageManager(projectDir: string, packageJson?: any
   for (const [lockfile, pm] of Object.entries(LOCKFILE_MAP)) {
     const exists = await fileExists(join(projectDir, lockfile))
     if (exists) {
-      return { name: pm, source: 'lockfile' }
+      return withNodeVersion({ name: pm, source: 'lockfile' }, nodeVersion)
     }
   }
 
   // 默认使用 npm
-  return { name: 'npm', source: 'default' }
+  return withNodeVersion({ name: 'npm', source: 'default' }, nodeVersion)
+}
+
+function getVoltaNodeVersion(packageJson: any): string | undefined {
+  const nodeVersion = packageJson?.volta?.node
+  return typeof nodeVersion === 'string' && nodeVersion.trim() ? nodeVersion.trim() : undefined
+}
+
+function withNodeVersion(info: PackageManagerInfo, nodeVersion?: string): PackageManagerInfo {
+  if (!nodeVersion) {
+    return info
+  }
+
+  return {
+    ...info,
+    nodeVersion,
+  }
 }
 
 /**
