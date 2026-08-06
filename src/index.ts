@@ -137,7 +137,8 @@ async function main() {
 
     case 'test':
       await runCommand(options.dir, {
-        noInstall: true,
+        noInstall: options.noInstall,
+        forceInstall: options.install,
         scriptType: 'test',
         entry: options.entry,
       })
@@ -145,7 +146,8 @@ async function main() {
 
     case 'build':
       await runCommand(options.dir, {
-        noInstall: true,
+        noInstall: options.noInstall,
+        forceInstall: options.install,
         scriptType: 'build',
         entry: options.entry,
       })
@@ -153,7 +155,8 @@ async function main() {
 
     case 'start':
       await runCommand(options.dir, {
-        noInstall: true,
+        noInstall: options.noInstall,
+        forceInstall: options.install,
         scriptType: 'start',
         entry: options.entry,
       })

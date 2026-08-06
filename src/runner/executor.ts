@@ -1,7 +1,15 @@
 import { spawn, ChildProcess } from 'child_process'
-import { execLog } from '../utils/log'
+import { constants as osConstants } from 'os'
+import { execLog, CliError } from '../utils/log'
 
 let currentProcess: ChildProcess | null = null
+
+const DEFAULT_CAPTURE_TIMEOUT_MS = 10_000
+
+function signalToExitCode(signal: NodeJS.Signals): number {
+  const num = osConstants.signals[signal as string]
+  return typeof num === 'number' ? 128 + num : 1
+}
 
 /**
  * 执行命令
@@ -38,14 +46,22 @@ export async function execute(
 
     const proc = currentProcess
 
-    proc.on('close', (code: number | null) => {
+    proc.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
       currentProcess = null
-      resolve(code ?? 0)
+      if (signal) {
+        resolve(signalToExitCode(signal))
+      } else {
+        resolve(code ?? 0)
+      }
     })
 
-    proc.on('error', (err: Error) => {
+    proc.on('error', (err: NodeJS.ErrnoException) => {
       currentProcess = null
-      reject(err)
+      if (err.code === 'ENOENT') {
+        reject(new CliError(`命令 "${command}" 不存在,请确认是否已安装`))
+      } else {
+        reject(err)
+      }
     })
   })
 }
@@ -58,9 +74,10 @@ export async function executeCapture(
   options: {
     cwd?: string
     env?: Record<string, string>
+    timeout?: number
   } = {}
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const { cwd = process.cwd(), env } = options
+  const { cwd = process.cwd(), env, timeout = DEFAULT_CAPTURE_TIMEOUT_MS } = options
 
   return new Promise((resolve, reject) => {
     const isWindows = process.platform === 'win32'
@@ -76,6 +93,12 @@ export async function executeCapture(
 
     let stdout = ''
     let stderr = ''
+    let timedOut = false
+
+    const timer = setTimeout(() => {
+      timedOut = true
+      proc.kill('SIGKILL')
+    }, timeout)
 
     proc.stdout.on('data', (data: Buffer) => {
       stdout += data.toString()
@@ -85,12 +108,24 @@ export async function executeCapture(
       stderr += data.toString()
     })
 
-    proc.on('close', (code: number | null) => {
-      resolve({ stdout, stderr, exitCode: code ?? 0 })
+    proc.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
+      clearTimeout(timer)
+      if (timedOut) {
+        resolve({ stdout, stderr, exitCode: 124 })
+      } else if (signal) {
+        resolve({ stdout, stderr, exitCode: signalToExitCode(signal) })
+      } else {
+        resolve({ stdout, stderr, exitCode: code ?? 0 })
+      }
     })
 
-    proc.on('error', (err: Error) => {
-      reject(err)
+    proc.on('error', (err: NodeJS.ErrnoException) => {
+      clearTimeout(timer)
+      if (err.code === 'ENOENT') {
+        resolve({ stdout, stderr, exitCode: 127 })
+      } else {
+        reject(err)
+      }
     })
   })
 }
@@ -99,26 +134,22 @@ export async function executeCapture(
  * 设置信号处理器
  */
 export function setupSignalHandlers() {
-  // Ctrl+C 处理
   process.on('SIGINT', () => {
     if (currentProcess) {
-      currentProcess.kill()
+      // With stdio: 'inherit', the child already received SIGINT from the terminal.
+      // Clear the reference so a second Ctrl+C forces immediate exit.
+      currentProcess = null
+    } else {
+      process.exit(130)
     }
-    process.exit(0)
   })
 
-  // SIGTERM 处理
   process.on('SIGTERM', () => {
     if (currentProcess) {
-      currentProcess.kill()
+      currentProcess.kill('SIGTERM')
+      currentProcess = null
+    } else {
+      process.exit(143)
     }
-    process.exit(0)
   })
-}
-
-/**
- * 获取当前运行的进程
- */
-export function getCurrentProcess(): ChildProcess | null {
-  return currentProcess
 }

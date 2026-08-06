@@ -178,7 +178,3 @@ export function getAvailableScripts(scriptsInfo: ScriptsInfo): string[] {
 export function hasScript(scriptsInfo: ScriptsInfo, scriptName: string): boolean {
   return scriptName in scriptsInfo.scripts
 }
-
-export function getScriptCommand(scriptsInfo: ScriptsInfo, scriptName: string): string | undefined {
-  return scriptsInfo.scripts[scriptName]
-}
