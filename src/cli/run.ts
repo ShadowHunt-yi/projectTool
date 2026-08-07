@@ -1,21 +1,25 @@
 import { createInterface } from 'node:readline/promises'
 import { analyzeProject, type ProjectInfo } from '../analyzer'
-import { getRunCommand, getInstallCommand } from '../analyzer/package-manager'
+import { getRunCommand, getInstallCommand, getWorkspaceRunCommand, getWorkspaceAllCommand } from '../analyzer/package-manager'
 import type { StandardScriptType } from '../analyzer/scripts'
 import { markDependenciesInstalled } from '../analyzer/dependencies'
 import { execute } from '../runner/executor'
 import { log, warn, success, info, newline, CliError } from '../utils/log'
 import { resolvePmRuntime } from '../utils/pm-availability'
+import { createAutoOpenHandler } from './open'
 
 interface RunOptions {
   noInstall?: boolean
   forceInstall?: boolean
   scriptType?: StandardScriptType
   entry?: string
+  filter?: string
+  all?: boolean
+  open?: boolean
 }
 
 export async function runCommand(projectDir: string, options: RunOptions = {}) {
-  const { noInstall = false, forceInstall = false, scriptType = 'dev', entry } = options
+  const { noInstall = false, forceInstall = false, scriptType = 'dev', entry, filter, all = false, open = false } = options
 
   log('正在分析项目...')
   const project = await analyzeProject(projectDir)
@@ -26,6 +30,10 @@ export async function runCommand(projectDir: string, options: RunOptions = {}) {
 
   log(`项目类型: ${project.type}`)
   log(`包管理器: ${project.packageManager.name} (from ${project.packageManager.source})`)
+
+  if (project.workspace?.isWorkspace) {
+    log(`Workspace: ${project.workspace.packages.length} 个子包`)
+  }
 
   if (!project.scripts) {
     throw new CliError('无法读取 package.json 的 scripts')
@@ -79,10 +87,33 @@ export async function runCommand(projectDir: string, options: RunOptions = {}) {
     log('依赖状态: 已是最新')
   }
 
+  // Workspace 模式
+  if (all || filter) {
+    if (!project.workspace?.isWorkspace) {
+      throw new CliError('当前项目不是 workspace,无法使用 --filter 或 --all')
+    }
+    const wsCmd = all
+      ? getWorkspaceAllCommand(resolvedPm, scriptName)
+      : getWorkspaceRunCommand(resolvedPm, scriptName, filter)
+    if (!wsCmd) {
+      throw new CliError(`包管理器 ${resolvedPm.name} 不支持 workspace 命令`)
+    }
+    const exitCode = await execute(wsCmd.cmd, {
+      cwd: projectDir,
+      env: resolvedPm.env,
+    })
+    if (exitCode !== 0) {
+      throw new CliError('脚本执行失败', exitCode)
+    }
+    return
+  }
+
   const runCmd = getRunCommand(resolvedPm, scriptName)
+  const onStdout = open && scriptType === 'dev' ? createAutoOpenHandler({ value: false }) : undefined
   const exitCode = await execute(runCmd, {
     cwd: projectDir,
     env: resolvedPm.env,
+    onStdout,
   })
   if (exitCode !== 0) {
     throw new CliError('脚本执行失败', exitCode)

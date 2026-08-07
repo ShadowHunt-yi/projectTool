@@ -1,6 +1,6 @@
 import { readFile } from 'fs/promises'
 import { join } from 'path'
-import { detectPackageManager, type PackageManagerInfo } from './package-manager'
+import { detectPackageManager, type PackageManagerInfo, detectWorkspace, type WorkspaceInfo } from './package-manager'
 import { analyzeScripts, type ScriptsInfo } from './scripts'
 import { checkDependencyStatus, type DependencyStatus } from './dependencies'
 import { loadPrLocalConfig, type PrLocalConfig } from './local-config'
@@ -12,6 +12,7 @@ export interface ProjectInfo {
   scripts: ScriptsInfo | null
   dependencies: DependencyStatus
   localConfig: PrLocalConfig | null
+  workspace: WorkspaceInfo | null
   name?: string
   version?: string
   description?: string
@@ -28,6 +29,7 @@ export async function analyzeProject(projectDir: string): Promise<ProjectInfo> {
       scripts: null,
       dependencies: { hasNodeModules: false, needsInstall: false },
       localConfig: null,
+      workspace: null,
     }
   }
 
@@ -39,10 +41,11 @@ export async function analyzeProject(projectDir: string): Promise<ProjectInfo> {
     // Keep default empty package info when package.json cannot be parsed.
   }
 
-  const [packageManager, dependencies, localConfig] = await Promise.all([
+  const [packageManager, dependencies, localConfig, workspace] = await Promise.all([
     detectPackageManager(projectDir, packageJson),
     checkDependencyStatus(projectDir),
     loadPrLocalConfig(projectDir),
+    detectWorkspace(projectDir, packageJson),
   ])
 
   const scripts = analyzeScripts(packageJson, localConfig)
@@ -53,12 +56,13 @@ export async function analyzeProject(projectDir: string): Promise<ProjectInfo> {
     scripts,
     dependencies,
     localConfig,
+    workspace,
     name: packageJson.name,
     version: packageJson.version,
     description: packageJson.description,
   }
 }
 
-export { detectPackageManager, type PackageManagerInfo } from './package-manager'
+export { detectPackageManager, type PackageManagerInfo, getAddCommand, getRemoveCommand, getCleanCacheCommand, getAuditCommand, getOutdatedCommand, getWorkspaceRunCommand, getWorkspaceAllCommand, detectWorkspace, type WorkspaceInfo } from './package-manager'
 export { analyzeScripts, type ScriptsInfo, getAvailableScripts, hasScript } from './scripts'
 export { checkDependencyStatus, type DependencyStatus } from './dependencies'

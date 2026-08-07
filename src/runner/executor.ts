@@ -22,9 +22,10 @@ export async function execute(
     cwd?: string
     env?: Record<string, string>
     silent?: boolean
+    onStdout?: (line: string) => void
   } = {}
 ): Promise<number> {
-  const { cwd = process.cwd(), env, silent = false } = options
+  const { cwd = process.cwd(), env, silent = false, onStdout } = options
 
   if (!silent) {
     execLog(cmd.join(' '))
@@ -37,14 +38,27 @@ export async function execute(
     const args = cmd.slice(1)
 
     // 启动子进程
+    const usePipe = !!onStdout
     currentProcess = spawn(command, args, {
       cwd,
       env: { ...process.env, ...env },
-      stdio: 'inherit',
+      stdio: usePipe ? ['pipe', 'pipe', 'inherit'] : 'inherit',
       shell: isWindows,
     })
 
     const proc = currentProcess
+
+    if (usePipe && proc.stdout) {
+      let buffer = ''
+      proc.stdout.on('data', (data: Buffer) => {
+        buffer += data.toString()
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          onStdout!(line)
+        }
+      })
+    }
 
     proc.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
       currentProcess = null
